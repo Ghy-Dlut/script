@@ -1,0 +1,16 @@
+$scriptPath = 'C:\Users\55451\.agents\skills\self-improving-agent\scripts\Write-LearningEntry.ps1'
+
+Describe 'Write-LearningEntry.ps1' {
+    It 'does not append a second pending learning when summary and details are identical' {
+        $workspace = Join-Path $TestDrive 'workspace'
+        New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+
+        & $scriptPath -Type Learning -Workspace $workspace -Category 'best_practice' -Summary 'Use project-local runtime state for Codex-triggered startup scripts in this workspace' -Details 'Keep runtime logs under a project-local directory so Codex-side verification stays inside the workspace sandbox.' | Out-Null
+        & $scriptPath -Type Learning -Workspace $workspace -Category 'best_practice' -Summary 'Use project-local runtime state for Codex-triggered startup scripts in this workspace' -Details 'Keep runtime logs under a project-local directory so Codex-side verification stays inside the workspace sandbox.' | Out-Null
+
+        $content = Get-Content -LiteralPath (Join-Path $workspace '.learnings\LEARNINGS.md') -Raw -Encoding UTF8
+        $summaryCount = [regex]::Matches($content, [regex]::Escape('Use project-local runtime state for Codex-triggered startup scripts in this workspace')).Count
+
+        $summaryCount | Should Be 1
+    }
+}
