@@ -1,0 +1,3 @@
+Included files:
+- C:\Users\55451\.codex\automations\knowledge-review-weekly\memory.md
+- C:\Users\55451\.agents\knowledge-base\review-queue\MEDIUM_VALUE_REVIEW.md
