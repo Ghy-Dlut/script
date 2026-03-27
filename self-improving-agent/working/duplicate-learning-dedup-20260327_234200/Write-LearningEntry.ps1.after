@@ -1,0 +1,331 @@
+param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('Learning', 'Error', 'Feature')]
+    [string]$Type,
+    [string]$Workspace = (Get-Location).Path,
+    [string]$Category = 'best_practice',
+    [Parameter(Mandatory = $true)]
+    [string]$Summary,
+    [string]$Details = '',
+    [string]$SuggestedAction = '',
+    [string]$Area = 'docs',
+    [string]$Priority,
+    [string]$Status = 'pending',
+    [string]$Source,
+    [string[]]$RelatedFiles = @(),
+    [string[]]$Tags = @(),
+    [string]$ToolName = '',
+    [string]$RequestedCapability = '',
+    [string]$UserContext = '',
+    [string]$ComplexityEstimate = 'medium',
+    [string]$ErrorText = '',
+    [switch]$AsObject
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Resolve-WorkspacePath {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Workspace path does not exist: $Path"
+    }
+    return (Resolve-Path -LiteralPath $Path).Path
+}
+
+function Ensure-LearningsRoot {
+    param(
+        [string]$WorkspaceRoot,
+        [string]$ScriptRoot
+    )
+    $learningsRoot = Join-Path $WorkspaceRoot '.learnings'
+    if (-not (Test-Path -LiteralPath $learningsRoot)) {
+        & (Join-Path $ScriptRoot 'Initialize-Learnings.ps1') -Workspace $WorkspaceRoot | Out-Null
+    }
+    return $learningsRoot
+}
+
+function Get-NextEntryId {
+    param(
+        [string]$TargetFile,
+        [string]$Prefix
+    )
+    $dateStamp = Get-Date -Format 'yyyyMMdd'
+    $pattern = "\[$Prefix-$dateStamp-(\d{3})\]"
+    $maxValue = 0
+
+    if (Test-Path -LiteralPath $TargetFile) {
+        foreach ($match in [regex]::Matches((Get-Content -Path $TargetFile -Raw), $pattern)) {
+            $value = [int]$match.Groups[1].Value
+            if ($value -gt $maxValue) {
+                $maxValue = $value
+            }
+        }
+    }
+
+    return "{0}-{1}-{2:D3}" -f $Prefix, $dateStamp, ($maxValue + 1)
+}
+
+function Join-ListOrDefault {
+    param(
+        [string[]]$Items,
+        [string]$DefaultValue
+    )
+    $values = @($Items | Where-Object { $_ -and $_.Trim().Length -gt 0 })
+    if ($values.Count -eq 0) {
+        return $DefaultValue
+    }
+    return ($values -join ', ')
+}
+
+function Normalize-EntryText {
+    param([string]$Text)
+
+    if ($null -eq $Text) {
+        return ''
+    }
+
+    return (($Text -replace "`r`n", "`n").Trim())
+}
+
+function Find-DuplicatePendingLearning {
+    param(
+        [string]$TargetFile,
+        [string]$Category,
+        [string]$Status,
+        [string]$Summary,
+        [string]$Details
+    )
+
+    if (-not (Test-Path -LiteralPath $TargetFile)) {
+        return $null
+    }
+
+    $content = Get-Content -LiteralPath $TargetFile -Raw -Encoding UTF8
+    if ([string]::IsNullOrWhiteSpace($content)) {
+        return $null
+    }
+
+    $normalizedSummary = Normalize-EntryText -Text $Summary
+    $normalizedDetails = Normalize-EntryText -Text $(if ($Details) { $Details } else { 'Pending details.' })
+    $entryPattern = '(?ms)^## \[(?<id>[^\]]+)\] (?<category>[^\r\n]+)\r?\n(?<body>.*?)(?=^---\s*$)'
+
+    foreach ($match in [regex]::Matches($content, $entryPattern)) {
+        $body = $match.Groups['body'].Value
+        $existingCategory = Normalize-EntryText -Text $match.Groups['category'].Value
+        $statusMatch = [regex]::Match($body, '(?m)^\*\*Status\*\*: (?<status>[^\r\n]+)$')
+        $summaryMatch = [regex]::Match($body, '(?ms)^### Summary\r?\n(?<summary>.*?)\r?\n\r?\n### Details')
+        $detailsMatch = [regex]::Match($body, '(?ms)^### Details\r?\n(?<details>.*?)\r?\n\r?\n### Suggested Action')
+
+        if (-not $statusMatch.Success -or -not $summaryMatch.Success -or -not $detailsMatch.Success) {
+            continue
+        }
+
+        $existingStatus = Normalize-EntryText -Text $statusMatch.Groups['status'].Value
+        $existingSummary = Normalize-EntryText -Text $summaryMatch.Groups['summary'].Value
+        $existingDetails = Normalize-EntryText -Text $detailsMatch.Groups['details'].Value
+
+        if ($existingCategory -eq (Normalize-EntryText -Text $Category) -and
+            $existingStatus -eq (Normalize-EntryText -Text $Status) -and
+            $existingSummary -eq $normalizedSummary -and
+            $existingDetails -eq $normalizedDetails) {
+            return [PSCustomObject]@{
+                entry_id = $match.Groups['id'].Value
+                target_file = $TargetFile
+                type = 'Learning'
+                action = 'duplicate'
+            }
+        }
+    }
+
+    return $null
+}
+
+function New-LearningEntry {
+    param(
+        [string]$EntryId,
+        [string]$Category,
+        [string]$LoggedAt,
+        [string]$Priority,
+        [string]$Status,
+        [string]$Area,
+        [string]$Summary,
+        [string]$Details,
+        [string]$SuggestedAction,
+        [string]$Source,
+        [string]$RelatedFiles,
+        [string]$Tags
+    )
+@"
+## [$EntryId] $Category
+
+**Logged**: $LoggedAt
+**Priority**: $Priority
+**Status**: $Status
+**Area**: $Area
+
+### Summary
+$Summary
+
+### Details
+$(if ($Details) { $Details } else { 'Pending details.' })
+
+### Suggested Action
+$(if ($SuggestedAction) { $SuggestedAction } else { 'Review and apply the learning where relevant.' })
+
+### Metadata
+- Source: $Source
+- Related Files: $RelatedFiles
+- Tags: $Tags
+
+---
+"@
+}
+
+function New-ErrorEntry {
+    param(
+        [string]$EntryId,
+        [string]$ToolName,
+        [string]$LoggedAt,
+        [string]$Priority,
+        [string]$Status,
+        [string]$Area,
+        [string]$Summary,
+        [string]$ErrorText,
+        [string]$SuggestedAction,
+        [string]$RelatedFiles
+    )
+
+    $title = if ($ToolName) { $ToolName } else { 'unknown-command' }
+@"
+## [$EntryId] $title
+
+**Logged**: $LoggedAt
+**Priority**: $Priority
+**Status**: $Status
+**Area**: $Area
+
+### Summary
+$Summary
+
+### Error
+```text
+$(if ($ErrorText) { $ErrorText } else { 'No error text captured.' })
+```
+
+### Context
+- Command/operation attempted: $(if ($ToolName) { $ToolName } else { 'not provided' })
+- Input or parameters used: not provided
+- Environment details: Windows PowerShell + Codex
+
+### Suggested Fix
+$(if ($SuggestedAction) { $SuggestedAction } else { 'Investigate the root cause and log the eventual fix.' })
+
+### Metadata
+- Reproducible: unknown
+- Related Files: $RelatedFiles
+
+---
+"@
+}
+
+function New-FeatureEntry {
+    param(
+        [string]$EntryId,
+        [string]$Capability,
+        [string]$LoggedAt,
+        [string]$Priority,
+        [string]$Status,
+        [string]$Area,
+        [string]$UserContext,
+        [string]$ComplexityEstimate,
+        [string]$SuggestedAction
+    )
+    $requestedCapability = if ($Capability) { $Capability } else { 'unnamed-capability' }
+@"
+## [$EntryId] $requestedCapability
+
+**Logged**: $LoggedAt
+**Priority**: $Priority
+**Status**: $Status
+**Area**: $Area
+
+### Requested Capability
+$requestedCapability
+
+### User Context
+$(if ($UserContext) { $UserContext } else { 'No extra context captured.' })
+
+### Complexity Estimate
+$ComplexityEstimate
+
+### Suggested Implementation
+$(if ($SuggestedAction) { $SuggestedAction } else { 'Design and implement the missing capability if it proves recurrent.' })
+
+### Metadata
+- Frequency: first_time
+- Related Features: none
+
+---
+"@
+}
+
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$workspaceRoot = Resolve-WorkspacePath -Path $Workspace
+$learningsRoot = Ensure-LearningsRoot -WorkspaceRoot $workspaceRoot -ScriptRoot $scriptRoot
+$loggedAt = (Get-Date).ToString('o')
+
+$defaults = switch ($Type) {
+    'Learning' { @{ Prefix = 'LRN'; File = 'LEARNINGS.md'; Priority = 'medium'; Source = 'conversation' } }
+    'Error' { @{ Prefix = 'ERR'; File = 'ERRORS.md'; Priority = 'high'; Source = 'error' } }
+    'Feature' { @{ Prefix = 'FEAT'; File = 'FEATURE_REQUESTS.md'; Priority = 'medium'; Source = 'user_feedback' } }
+}
+
+$effectivePriority = if ($Priority) { $Priority } else { $defaults.Priority }
+$effectiveSource = if ($Source) { $Source } else { $defaults.Source }
+$targetFile = Join-Path $learningsRoot $defaults.File
+$duplicateEntry = $null
+if ($Type -eq 'Learning') {
+    $duplicateEntry = Find-DuplicatePendingLearning -TargetFile $targetFile -Category $Category -Status $Status -Summary $Summary -Details $Details
+}
+
+if ($null -ne $duplicateEntry) {
+    if ($AsObject) {
+        $duplicateEntry
+    } else {
+        $duplicateEntry | Format-List
+    }
+    return
+}
+
+$entryId = Get-NextEntryId -TargetFile $targetFile -Prefix $defaults.Prefix
+$relatedFilesText = Join-ListOrDefault -Items $RelatedFiles -DefaultValue 'none'
+$tagsText = Join-ListOrDefault -Items $Tags -DefaultValue 'none'
+$errorBlock = if ($ErrorText) { $ErrorText } else { $Details }
+
+$entryBody = switch ($Type) {
+    'Learning' {
+        New-LearningEntry -EntryId $entryId -Category $Category -LoggedAt $loggedAt -Priority $effectivePriority -Status $Status -Area $Area -Summary $Summary -Details $Details -SuggestedAction $SuggestedAction -Source $effectiveSource -RelatedFiles $relatedFilesText -Tags $tagsText
+    }
+    'Error' {
+        New-ErrorEntry -EntryId $entryId -ToolName $ToolName -LoggedAt $loggedAt -Priority $effectivePriority -Status $Status -Area $Area -Summary $Summary -ErrorText $errorBlock -SuggestedAction $SuggestedAction -RelatedFiles $relatedFilesText
+    }
+    'Feature' {
+        $capability = if ($RequestedCapability) { $RequestedCapability } else { $Summary }
+        New-FeatureEntry -EntryId $entryId -Capability $capability -LoggedAt $loggedAt -Priority $effectivePriority -Status $Status -Area $Area -UserContext $UserContext -ComplexityEstimate $ComplexityEstimate -SuggestedAction $SuggestedAction
+    }
+}
+
+Add-Content -Path $targetFile -Value "`r`n$entryBody" -Encoding UTF8
+
+$result = [PSCustomObject]@{
+    entry_id = $entryId
+    target_file = $targetFile
+    type = $Type
+    action = 'created'
+}
+
+if ($AsObject) {
+    $result
+} else {
+    $result | Format-List
+}
