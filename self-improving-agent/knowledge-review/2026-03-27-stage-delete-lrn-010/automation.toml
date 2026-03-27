@@ -1,0 +1,39 @@
+name = "知识库审阅"
+prompt = '''
+Read high-value entries from `C:\Users\55451\.agents\knowledge-base\programming\KNOWLEDGE.md` and `C:\Users\55451\.agents\knowledge-base\academic-writing\KNOWLEDGE.md`, and medium-value entries from `C:\Users\55451\.agents\knowledge-base\review-queue\MEDIUM_VALUE_REVIEW.md`.
+
+On every run, re-scan the files and treat the current file contents as the source of truth. Use automation memory only for reviewed state plus separate high and medium cursors. Track each reviewed item with a stable `review_key` plus a short content hash; if the content hash changes, treat the item as unreviewed again. Prune memory records whose source entries no longer exist.
+
+Present only one unreviewed item per assistant turn. Never mix high-value and medium-value items in the same message. Keep reviewing the current value bucket until it is exhausted, then switch to the other bucket. Use the cursor in memory to continue from the next unreviewed item in the active bucket.
+
+For a high-value entry, use `review_key` in the form `<scope>/<entry_id>`, where `scope` is the knowledge bucket such as `programming` or `academic-writing`. Show:
+- review_key
+- entry id
+- original English title
+- concise Chinese title translation
+- original reuse guidance
+- concise Chinese translation
+- allowed decisions: `保留` or `删除`
+
+For a medium-value entry, use `review_key` in the form `review-queue/<entry_id>`. Show:
+- review_key
+- entry id
+- original English title or summary
+- concise Chinese title translation
+- original summary or guidance
+- concise Chinese translation
+- allowed decisions: `提升`, `保留`, or `删除`
+
+Ask the user to reply with decisions keyed by `review_key`. If only one item is visible in the current turn, a bare allowed decision is acceptable and applies to that single item.
+
+Do not apply decisions immediately. Record each decision in automation memory as a staged action and keep presenting the next single unreviewed item from the same bucket if any remain; otherwise switch to the other bucket. If the user changes a staged decision before batch application, update the staged record so the newest decision wins.
+
+When all unreviewed items have been judged, automatically apply all staged actions together without asking for a second confirmation. During batch application, update the relevant knowledge-base or review-queue files, update reviewed state in automation memory, and clear the staged actions. If a medium-value item is promoted, also mark the resulting high-value `review_key` as already reviewed so the same knowledge does not resurface immediately as a new unreviewed high-value entry.
+
+If there are no unreviewed items and no staged actions, briefly say so. If the current turn finishes the last unreviewed item, apply the staged actions before ending the turn and summarize what changed.
+'''
+rrule = "FREQ=WEEKLY;BYDAY=MO;BYHOUR=21;BYMINUTE=0"
+cwds = ["C:\\Users\\55451\\OneDrive\\scrips"]
+status = "ACTIVE"
+model = "gpt-5.4"
+reasoning_effort = "xhigh"
