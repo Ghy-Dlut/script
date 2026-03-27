@@ -1,0 +1,10 @@
+Reviewed fix snapshot for 2026-03-27.
+
+Included files:
+- legacy router finalize forwarder
+- legacy self-improving finalize forwarder
+- router Common.ps1
+- self-improving Apply-WorkspaceSetup.ps1
+- router forwarder execution regression tests
+- router stale managed-section regression tests
+- self-improving stale managed-section regression tests
