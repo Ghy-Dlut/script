@@ -1,0 +1,9 @@
+{
+    "timestamp":  "20260418_230028",
+    "action":  "preinstall-backup",
+    "target":  "https://github.com/garrytan/gstack.git",
+    "source_dir":  "C:\\Users\\hp\\.codex\\skills",
+    "archive":  "C:\\Users\\hp\\.codex\\backups\\skills\\20260418_230028-gstack-repourl-preinstall\\skills-preinstall.zip",
+    "sha256":  "F7778C1727C31CAB47AF68ED46F9049410D845F50661E783282C94BC442E781C",
+    "created_at":  "2026-04-18T23:01:10.0532922+08:00"
+}
