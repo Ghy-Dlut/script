@@ -1,0 +1,11 @@
+{
+  "timestamp": "20260418_231956",
+  "action": "preinstall-backup",
+  "target": "https://github.com/karpathy/autoresearch",
+  "install_target": "C:\\Users\\hp\\.codex\\repos\\autoresearch",
+  "backup_root": "C:\\Users\\hp\\.codex\\backups\\autoresearch\\20260418_231956-autoresearch-preinstall",
+  "target_preexists": false,
+  "uv_preexists": false,
+  "uvx_preexists": false,
+  "created_at": "2026-04-18T23:20:23.9047409+08:00"
+}
