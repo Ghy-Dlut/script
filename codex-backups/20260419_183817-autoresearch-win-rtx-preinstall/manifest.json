@@ -1,0 +1,10 @@
+{
+  "timestamp": "20260419_183817",
+  "action": "preinstall-backup",
+  "target": "https://github.com/jsegov/autoresearch-win-rtx",
+  "install_target": "C:\\Users\\hp\\.codex\\repos\\autoresearch-win-rtx",
+  "backup_root": "C:\\Users\\hp\\.codex\\backups\\autoresearch\\20260419_183817-autoresearch-win-rtx-preinstall",
+  "target_preexists": false,
+  "uv_preexists": true,
+  "created_at": "2026-04-19T18:38:40.8910750+08:00"
+}
