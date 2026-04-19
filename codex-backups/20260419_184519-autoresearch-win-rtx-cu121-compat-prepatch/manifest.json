@@ -1,0 +1,8 @@
+{
+  "timestamp": "20260419_184519",
+  "action": "prepatch-backup",
+  "target": "C:\\Users\\hp\\.codex\\repos\\autoresearch-win-rtx\\pyproject.toml",
+  "backup_root": "C:\\Users\\hp\\.codex\\backups\\autoresearch\\20260419_184519-autoresearch-win-rtx-cu121-compat-prepatch",
+  "repo": "C:\\Users\\hp\\.codex\\repos\\autoresearch-win-rtx",
+  "created_at": "2026-04-19T18:45:48.3023033+08:00"
+}
